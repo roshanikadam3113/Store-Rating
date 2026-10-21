@@ -1,152 +1,249 @@
-// frontend/src/pages/Register.jsx
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { authAPI } from "../services/api";
-import { validateRegisterForm, hasErrors } from "../utils/validators";
+import { getSafeApiErrorMessage } from "../utils/apiErrors";
+import { hasErrors, validateRegisterForm } from "../utils/validators";
 
 export default function Register() {
   const navigate = useNavigate();
+  const submittingRef = useRef(false);
+  const redirectTimerRef = useRef(null);
 
   const [form, setForm] = useState({
-    name: "", email: "", address: "", password: "", confirmPassword: "",
+    name: "",
+    email: "",
+    address: "",
+    password: "",
+    confirmPassword: "",
   });
-  const [errors,   setErrors]   = useState({});
+  const [errors, setErrors] = useState({});
   const [apiError, setApiError] = useState("");
-  const [success,  setSuccess]  = useState("");
-  const [loading,  setLoading]  = useState(false);
-  const [showPass, setShowPass] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  function handleChange(e) {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
-    if (errors[name]) setErrors((prev) => ({ ...prev, [name]: null }));
-    setApiError(""); setSuccess("");
+  useEffect(() => () => window.clearTimeout(redirectTimerRef.current), []);
+
+  function handleChange(event) {
+    const { name, value } = event.target;
+    const nextForm = { ...form, [name]: value };
+    setForm(nextForm);
+    setApiError("");
+    setSuccess(false);
+    window.clearTimeout(redirectTimerRef.current);
+
+    if (errors[name] || (name === "password" && errors.confirmPassword)) {
+      const nextErrors = validateRegisterForm(nextForm);
+      setErrors((current) => ({
+        ...current,
+        [name]: nextErrors[name],
+        ...(name === "password" ? { confirmPassword: nextErrors.confirmPassword } : {}),
+      }));
+    }
   }
 
-  async function handleSubmit(e) {
-    e.preventDefault();
-    const errs = validateRegisterForm(form);
-    if (hasErrors(errs)) { setErrors(errs); return; }
+  async function handleSubmit(event) {
+    event.preventDefault();
+    if (submittingRef.current) return;
 
+    const nextErrors = validateRegisterForm(form);
+    setErrors(nextErrors);
+    if (hasErrors(nextErrors)) return;
+
+    submittingRef.current = true;
     setLoading(true);
-    setApiError(""); setSuccess("");
+    setApiError("");
+    setSuccess(false);
+
     try {
-      // Send only required fields — never send role from the frontend
+      // Public registration intentionally sends no role; the backend assigns "user".
       await authAPI.register({
-        name:     form.name.trim(),
-        email:    form.email.trim().toLowerCase(),
-        address:  form.address.trim(),
+        name: form.name.trim(),
+        email: form.email.trim().toLowerCase(),
+        address: form.address.trim(),
         password: form.password,
       });
-      setSuccess("Account created! Redirecting to login…");
-      setTimeout(() => navigate("/login"), 2000);
-    } catch (err) {
-      setApiError(err.response?.data?.message || "Registration failed. Please try again.");
+
+      setSuccess(true);
+      redirectTimerRef.current = window.setTimeout(() => navigate("/login", { replace: true }), 2200);
+    } catch (error) {
+      setApiError(getSafeApiErrorMessage(
+        error,
+        "We couldn’t create your account. Please review your details and try again.",
+        [form.password, form.confirmPassword],
+      ));
     } finally {
+      submittingRef.current = false;
       setLoading(false);
     }
   }
 
-  const charCount = form.name.trim().length;
+  const nameCount = form.name.trim().length;
+  const addressCount = form.address.trim().length;
 
   return (
-    <div className="auth-page">
-      <div className="auth-card auth-card-wide">
-        <div className="auth-header">
-          <span className="auth-logo">⭐</span>
-          <h1>Create Account</h1>
-          <p>Join NexaPrime Store Ratings</p>
-        </div>
+    <section className="auth-page auth-page-register" aria-labelledby="register-title">
+      <div className="auth-card auth-card-wide auth-card-register">
+        <header className="auth-header">
+          <span className="auth-logo" aria-hidden="true">NP</span>
+          <p className="auth-eyebrow">NexaPrime Ratings</p>
+          <h1 id="register-title">Create your account</h1>
+          <p>Join the community and share your store experiences.</p>
+        </header>
 
-        {apiError && <div className="alert alert-error"  role="alert">{apiError}</div>}
-        {success  && <div className="alert alert-success" role="alert">{success}</div>}
+        {apiError && <div className="alert alert-error auth-message" role="alert">{apiError}</div>}
+        {success && (
+          <div className="alert alert-success auth-message" role="status" aria-live="polite">
+            <span>Your account is ready. You can now <Link to="/login">sign in</Link>.</span>
+          </div>
+        )}
 
-        <form onSubmit={handleSubmit} noValidate>
-          {/* Name */}
+        <form className="auth-form auth-register-form" onSubmit={handleSubmit} noValidate>
           <div className="form-group">
             <label htmlFor="name">
-              Full Name
-              <span className={`char-counter ${charCount < 20 ? "counter-warn" : "counter-ok"}`}>
-                {charCount}/60
-              </span>
+              Full name
+              <span className="char-counter">{nameCount}/60</span>
             </label>
             <input
-              id="name" name="name" type="text"
-              value={form.name} onChange={handleChange}
+              id="name"
+              name="name"
+              type="text"
+              autoComplete="name"
+              value={form.name}
+              onChange={handleChange}
               className={errors.name ? "input-error" : ""}
-              placeholder="At least 20 characters"
-              disabled={loading} maxLength={60}
-            />
-            {errors.name && <span className="field-error">{errors.name}</span>}
-          </div>
-
-          {/* Email */}
-          <div className="form-group">
-            <label htmlFor="reg-email">Email Address</label>
-            <input
-              id="reg-email" name="email" type="email" autoComplete="email"
-              value={form.email} onChange={handleChange}
-              className={errors.email ? "input-error" : ""}
-              placeholder="you@example.com"
+              placeholder="Your full name"
+              maxLength={60}
+              aria-invalid={Boolean(errors.name)}
+              aria-describedby={errors.name ? "register-name-error" : "register-name-help"}
+              required
               disabled={loading}
             />
-            {errors.email && <span className="field-error">{errors.email}</span>}
+            {errors.name ? (
+              <span className="field-error" id="register-name-error">{errors.name}</span>
+            ) : (
+              <span className="field-help" id="register-name-help">Use 20–60 characters.</span>
+            )}
           </div>
 
-          {/* Address */}
           <div className="form-group">
+            <label htmlFor="reg-email">Email address</label>
+            <input
+              id="reg-email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              inputMode="email"
+              autoCapitalize="none"
+              spellCheck="false"
+              value={form.email}
+              onChange={handleChange}
+              className={errors.email ? "input-error" : ""}
+              placeholder="you@example.com"
+              aria-invalid={Boolean(errors.email)}
+              aria-describedby={errors.email ? "register-email-error" : undefined}
+              required
+              disabled={loading}
+            />
+            {errors.email && <span className="field-error" id="register-email-error">{errors.email}</span>}
+          </div>
+
+          <div className="form-group form-group-wide">
             <label htmlFor="address">
               Address
-              <span className="char-counter counter-ok">{form.address.trim().length}/400</span>
+              <span className="char-counter">{addressCount}/400</span>
             </label>
             <textarea
-              id="address" name="address"
-              value={form.address} onChange={handleChange}
+              id="address"
+              name="address"
+              autoComplete="street-address"
+              value={form.address}
+              onChange={handleChange}
               className={errors.address ? "input-error" : ""}
-              placeholder="Your full address"
-              rows={2} maxLength={400} disabled={loading}
+              placeholder="Street, city, and region"
+              rows={2}
+              maxLength={400}
+              aria-invalid={Boolean(errors.address)}
+              aria-describedby={errors.address ? "register-address-error" : undefined}
+              required
+              disabled={loading}
             />
-            {errors.address && <span className="field-error">{errors.address}</span>}
+            {errors.address && <span className="field-error" id="register-address-error">{errors.address}</span>}
           </div>
 
-          {/* Password */}
           <div className="form-group">
             <label htmlFor="reg-password">Password</label>
             <div className="input-with-toggle">
               <input
-                id="reg-password" name="password"
-                type={showPass ? "text" : "password"} autoComplete="new-password"
-                value={form.password} onChange={handleChange}
+                id="reg-password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
+                value={form.password}
+                onChange={handleChange}
                 className={errors.password ? "input-error" : ""}
-                placeholder="8–16 chars, uppercase + special"
+                placeholder="Create a password"
+                minLength={8}
+                maxLength={16}
+                aria-invalid={Boolean(errors.password)}
+                aria-describedby={errors.password ? "register-password-hint register-password-error" : "register-password-hint"}
+                required
                 disabled={loading}
               />
-              <button type="button" className="toggle-pass"
-                onClick={() => setShowPass((p) => !p)}
-                aria-label={showPass ? "Hide password" : "Show password"}>
-                {showPass ? "🙈" : "👁️"}
+              <button
+                type="button"
+                className="toggle-pass"
+                onClick={() => setShowPassword((visible) => !visible)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-controls="reg-password"
+                disabled={loading}
+              >
+                <span aria-hidden="true">{showPassword ? "Hide" : "Show"}</span>
               </button>
             </div>
-            {errors.password && <span className="field-error">{errors.password}</span>}
+            <span className="field-help" id="register-password-hint">
+              8–16 characters, with an uppercase letter and a special character.
+            </span>
+            {errors.password && <span className="field-error" id="register-password-error">{errors.password}</span>}
           </div>
 
-          {/* Confirm Password */}
           <div className="form-group">
-            <label htmlFor="confirmPassword">Confirm Password</label>
-            <input
-              id="confirmPassword" name="confirmPassword" type="password"
-              autoComplete="new-password"
-              value={form.confirmPassword} onChange={handleChange}
-              className={errors.confirmPassword ? "input-error" : ""}
-              placeholder="Repeat your password"
-              disabled={loading}
-            />
-            {errors.confirmPassword && <span className="field-error">{errors.confirmPassword}</span>}
+            <label htmlFor="confirmPassword">Confirm password</label>
+            <div className="input-with-toggle">
+              <input
+                id="confirmPassword"
+                name="confirmPassword"
+                type={showConfirmPassword ? "text" : "password"}
+                autoComplete="new-password"
+                value={form.confirmPassword}
+                onChange={handleChange}
+                className={errors.confirmPassword ? "input-error" : ""}
+                placeholder="Enter your password again"
+                aria-invalid={Boolean(errors.confirmPassword)}
+                aria-describedby={errors.confirmPassword ? "register-confirm-error" : undefined}
+                required
+                disabled={loading}
+              />
+              <button
+                type="button"
+                className="toggle-pass"
+                onClick={() => setShowConfirmPassword((visible) => !visible)}
+                aria-label={showConfirmPassword ? "Hide confirmation password" : "Show confirmation password"}
+                aria-controls="confirmPassword"
+                disabled={loading}
+              >
+                <span aria-hidden="true">{showConfirmPassword ? "Hide" : "Show"}</span>
+              </button>
+            </div>
+            {errors.confirmPassword && (
+              <span className="field-error" id="register-confirm-error">{errors.confirmPassword}</span>
+            )}
           </div>
 
-          <button type="submit" className="btn btn-primary btn-full"
-            disabled={loading} aria-busy={loading}>
-            {loading ? "Creating account…" : "Create Account"}
+          <button type="submit" className="btn btn-primary btn-full auth-submit auth-submit-wide" disabled={loading} aria-busy={loading}>
+            {loading && <span className="auth-submit-spinner" aria-hidden="true" />}
+            <span>{loading ? "Creating account…" : "Create account"}</span>
           </button>
         </form>
 
@@ -154,6 +251,6 @@ export default function Register() {
           Already have an account? <Link to="/login">Sign in</Link>
         </p>
       </div>
-    </div>
+    </section>
   );
 }

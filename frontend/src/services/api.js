@@ -87,7 +87,10 @@ export const authAPI = {
 
 // Stores
 export const storeAPI = {
-  getAll:   (search) => api.get("/stores", { params: search ? { search } : {} }),
+  // The backend treats this value as a regex; escape user input so searches stay literal.
+  getAll:   (search) => api.get("/stores", {
+    params: search ? { search: search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") } : {},
+  }),
   getById:  (id)     => api.get(`/stores/${id}`),
 };
 

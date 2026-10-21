@@ -1,118 +1,130 @@
-// frontend/src/pages/UserDashboard.jsx
-import { useState, useEffect, useCallback } from "react";
-import { useAuth } from "../context/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { storeAPI } from "../services/api";
+import Loader from "../components/Loader";
 import SearchBar from "../components/SearchBar";
 import StoreCard from "../components/StoreCard";
-import Loader    from "../components/Loader";
+
+function getRequestError(error) {
+  const message = error.response?.data?.message;
+  return typeof message === "string" && message.trim()
+    ? message
+    : "We couldn’t load stores. Check your connection and try again.";
+}
 
 export default function UserDashboard() {
-  const { user, logout }   = useAuth();
-  const navigate           = useNavigate();
-
-  const [stores,  setStores]  = useState([]);
+  const [stores, setStores] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState("");
-  const [search,  setSearch]  = useState("");
+  const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const requestIdRef = useRef(0);
 
-  // Fetch stores — re-runs when search term changes
-  const fetchStores = useCallback(async (term = "") => {
+  const fetchStores = useCallback(async (term) => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     setError("");
+
     try {
-      const res = await storeAPI.getAll(term);
-      setStores(res.data.stores || []);
-    } catch (err) {
-      if (err.response?.status !== 401) {
-        setError(err.response?.data?.message || "Failed to load stores. Please try again.");
+      const response = await storeAPI.getAll(term);
+      const result = response.data?.stores;
+      if (!Array.isArray(result)) {
+        throw new Error("Unexpected store list response.");
+      }
+      if (requestId === requestIdRef.current) {
+        setStores(result);
+        setError("");
+      }
+    } catch (requestError) {
+      if (requestId === requestIdRef.current && requestError.response?.status !== 401) {
+        setError(getRequestError(requestError));
       }
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, []);
 
-  useEffect(() => { fetchStores(search); }, [search, fetchStores]);
+  useEffect(() => {
+    fetchStores(search);
+    return () => {
+      requestIdRef.current += 1;
+    };
+  }, [search, fetchStores]);
 
-  // Called by StoreCard after a successful rating submission
-  // Updates the local store's myRating and recalculates average optimistically
-  function handleRatingUpdate(storeId, newRating) {
-    setStores((prev) =>
-      prev.map((s) => {
-        if (s._id !== storeId) return s;
-        const wasRated  = s.myRating !== null && s.myRating !== undefined;
-        const total     = wasRated ? s.totalRatings : s.totalRatings + 1;
-        const oldSum    = s.averageRating * s.totalRatings;
-        const newSum    = wasRated ? (oldSum - s.myRating + newRating) : (oldSum + newRating);
-        return {
-          ...s,
-          myRating:      newRating,
-          totalRatings:  total,
-          averageRating: parseFloat((newSum / total).toFixed(1)),
-        };
-      })
-    );
-  }
-
-  function handleLogout() {
-    logout();
-    navigate("/login", { replace: true });
-  }
+  const handleRatingUpdate = useCallback((updatedStore) => {
+    if (!updatedStore?._id) return;
+    setStores((currentStores) => currentStores.map((store) => (
+      String(store._id) === String(updatedStore._id)
+        ? { ...store, ...updatedStore }
+        : store
+    )));
+  }, []);
 
   return (
-    <div className="dashboard-page">
-      <div className="dashboard-header">
+    <div className="dashboard-page store-discovery-page">
+      <header className="dashboard-header store-discovery-header">
         <div>
-          <h1 className="dashboard-title">Store Ratings</h1>
-          <p className="dashboard-subtitle">
-            Browse stores and share your experience
-          </p>
+          <p className="page-eyebrow">Store directory</p>
+          <h1 className="dashboard-title">Find a store worth rating</h1>
+          <p className="dashboard-subtitle">Explore local businesses and share your experience.</p>
         </div>
-        <div className="dashboard-user-info">
-          <span className="user-name-pill">{user?.name}</span>
-          <button onClick={handleLogout} className="btn btn-outline btn-sm">Logout</button>
-        </div>
-      </div>
+      </header>
 
-      <div className="search-section">
+      <section className="store-directory-tools" aria-label="Find stores">
+        <div className="store-search-copy">
+          <h2>Browse stores</h2>
+          <p>Search by store name. Average scores and rating counts come from store data.</p>
+        </div>
         <SearchBar onSearch={setSearch} />
-      </div>
+      </section>
 
-      {loading && <Loader message="Loading stores…" />}
+      {loading && <Loader message={search ? "Searching stores…" : "Loading stores…"} />}
 
       {!loading && error && (
-        <div className="alert alert-error" role="alert">
-          {error}
-          <button className="btn btn-sm btn-outline" style={{ marginLeft: "1rem" }}
-            onClick={() => fetchStores(search)}>
-            Retry
+        <div className="alert alert-error store-list-error" role="alert">
+          <span>{error}</span>
+          <button
+            className="btn btn-outline btn-sm"
+            type="button"
+            onClick={() => fetchStores(search)}
+          >
+            Try again
           </button>
         </div>
       )}
 
       {!loading && !error && stores.length === 0 && (
-        <div className="empty-state">
-          <span className="empty-icon">🏪</span>
-          <h2>No stores found</h2>
-          <p>{search ? `No stores match "${search}". Try a different search.` : "No stores have been registered yet."}</p>
+        <div className="empty-state store-empty-state">
+          <span className="empty-state-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <path d="M4 10v10h16V10M3 10l2-6h14l2 6M3 10a3 3 0 006 0 3 3 0 006 0 3 3 0 006 0M9 20v-6h6v6" />
+            </svg>
+          </span>
+          <h2>{search ? "No stores match that name" : "No stores available yet"}</h2>
+          <p>
+            {search
+              ? "Try another name, or use the clear control in search to browse every store."
+              : "Stores will appear here as soon as they are available."}
+          </p>
         </div>
       )}
 
       {!loading && !error && stores.length > 0 && (
-        <>
-          <p className="result-count">
-            {stores.length} store{stores.length !== 1 ? "s" : ""}{search ? ` for "${search}"` : ""}
-          </p>
+        <section className="store-results" aria-label="Store results">
+          <div className="store-results-heading">
+            <p className="result-count" aria-live="polite">
+              <strong>{stores.length}</strong> {stores.length === 1 ? "store" : "stores"}
+              {search && <span> matching “{search}”</span>}
+            </p>
+          </div>
           <div className="stores-grid">
-            {stores.map((store) => (
+            {stores.map((store, index) => (
               <StoreCard
-                key={store._id}
+                key={store._id || `${store.name || "store"}-${index}`}
                 store={store}
                 onRatingUpdate={handleRatingUpdate}
               />
             ))}
           </div>
-        </>
+        </section>
       )}
     </div>
   );

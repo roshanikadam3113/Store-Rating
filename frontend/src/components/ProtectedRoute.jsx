@@ -1,7 +1,7 @@
 // frontend/src/components/ProtectedRoute.jsx
 // Route guard component for NexaPrime Store Rating Application
 
-import { Navigate, useLocation } from "react-router-dom";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import Loader from "./Loader";
 
@@ -42,5 +42,5 @@ export default function ProtectedRoute({ children, requiredRole }) {
     return <Navigate to={correctPath} replace />;
   }
 
-  return children;
+  return children ?? <Outlet />;
 }

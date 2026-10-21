@@ -1,75 +1,95 @@
-// frontend/src/components/StarRating.jsx
-// Interactive and read-only star rating component
+import { useRef, useState } from "react";
 
-import { useState } from "react";
-
-/**
- * StarRating
- *
- * Props:
- *  value      — current selected value (1–5 or 0/null for none)
- *  onChange   — callback(newValue) — omit to make read-only
- *  readOnly   — boolean: if true, stars are display-only
- *  size       — "sm" | "md" | "lg"
- *  label      — accessible label for screen readers
- */
 export default function StarRating({
-  value    = 0,
+  value = 0,
   onChange,
   readOnly = false,
-  size     = "md",
-  label    = "Rating",
+  disabled = false,
+  size = "md",
+  label = "Rating",
 }) {
   const [hovered, setHovered] = useState(0);
-
+  const starRefs = useRef([]);
+  const selected = Number.isFinite(Number(value)) ? Number(value) : 0;
+  const active = readOnly ? selected : (hovered || selected);
   const sizeMap = { sm: 18, md: 24, lg: 32 };
-  const px      = sizeMap[size] || 24;
+  const px = sizeMap[size] || sizeMap.md;
 
-  const active  = readOnly ? value : (hovered || value);
+  function handleKeyDown(event, currentStar) {
+    if (readOnly || disabled || !onChange) return;
 
-  function handleClick(star) {
-    if (!readOnly && onChange) onChange(star);
+    let nextStar;
+    if (event.key === "ArrowRight" || event.key === "ArrowUp") {
+      nextStar = currentStar === 5 ? 1 : currentStar + 1;
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
+      nextStar = currentStar === 1 ? 5 : currentStar - 1;
+    } else if (event.key === "Home") {
+      nextStar = 1;
+    } else if (event.key === "End") {
+      nextStar = 5;
+    } else {
+      return;
+    }
+
+    event.preventDefault();
+    onChange(nextStar);
+    starRefs.current[nextStar - 1]?.focus();
   }
 
-  function handleKey(e, star) {
-    if (!readOnly && (e.key === "Enter" || e.key === " ")) {
-      e.preventDefault();
-      handleClick(star);
-    }
+  if (readOnly) {
+    return (
+      <div
+        className={`star-rating star-${size}`}
+        role="img"
+        aria-label={`${label}: ${selected > 0 ? `${selected.toFixed(1)} out of 5` : "No ratings yet"}`}
+      >
+        {[1, 2, 3, 4, 5].map((star) => (
+          <span
+            key={star}
+            className={`star ${star <= active ? "star-filled" : "star-empty"} star-readonly`}
+            style={{ fontSize: px, lineHeight: 1 }}
+            aria-hidden="true"
+          >
+            ★
+          </span>
+        ))}
+        <span className={`star-value-label${selected === 0 ? " text-muted" : ""}`} aria-hidden="true">
+          {selected > 0 ? selected.toFixed(1) : "No ratings yet"}
+        </span>
+      </div>
+    );
   }
 
   return (
     <div
       className={`star-rating star-${size}`}
-      role={readOnly ? "img" : "group"}
-      aria-label={`${label}: ${value || 0} out of 5`}
+      role="radiogroup"
+      aria-label={label}
+      aria-disabled={disabled || undefined}
+      onMouseLeave={() => setHovered(0)}
     >
       {[1, 2, 3, 4, 5].map((star) => (
-        <span
+        <button
           key={star}
-          className={`star ${star <= active ? "star-filled" : "star-empty"} ${readOnly ? "star-readonly" : "star-interactive"}`}
+          ref={(element) => { starRefs.current[star - 1] = element; }}
+          type="button"
+          className={`star star-button ${star <= active ? "star-filled" : "star-empty"} star-interactive`}
           style={{ fontSize: px, lineHeight: 1 }}
-          onClick={() => handleClick(star)}
-          onMouseEnter={() => !readOnly && setHovered(star)}
-          onMouseLeave={() => !readOnly && setHovered(0)}
-          onKeyDown={(e) => handleKey(e, star)}
-          tabIndex={readOnly ? -1 : 0}
-          role={readOnly ? "presentation" : "radio"}
-          aria-checked={star === value}
+          role="radio"
+          aria-checked={star === selected}
           aria-label={`${star} star${star !== 1 ? "s" : ""}`}
+          tabIndex={star === selected || (selected === 0 && star === 1) ? 0 : -1}
+          disabled={disabled}
+          onClick={() => onChange?.(star)}
+          onKeyDown={(event) => handleKeyDown(event, star)}
+          onMouseEnter={() => !disabled && setHovered(star)}
         >
           ★
-        </span>
+        </button>
       ))}
-      {!readOnly && value > 0 && (
-        <span className="star-value-label">{value}/5</span>
-      )}
-      {readOnly && value > 0 && (
-        <span className="star-value-label">{value.toFixed(1)}</span>
-      )}
-      {readOnly && value === 0 && (
-        <span className="star-value-label text-muted">No ratings yet</span>
-      )}
+      <span className="star-value-label" aria-live="polite">
+        {selected > 0 ? `${selected}/5 selected` : "Choose 1–5"}
+      </span>
     </div>
   );
 }

@@ -1,15 +1,10 @@
 // frontend/src/pages/OwnerDashboard.jsx
 import { useState, useEffect } from "react";
-import { useAuth } from "../context/AuthContext";
-import { useNavigate } from "react-router-dom";
 import { ownerAPI } from "../services/api";
 import StarRating from "../components/StarRating";
 import Loader     from "../components/Loader";
 
 export default function OwnerDashboard() {
-  const { user, logout }      = useAuth();
-  const navigate              = useNavigate();
-
   const [store,    setStore]    = useState(null);
   const [ratings,  setRatings]  = useState([]);
   const [loading,  setLoading]  = useState(true);
@@ -39,21 +34,12 @@ export default function OwnerDashboard() {
     fetchDashboard();
   }, []);
 
-  function handleLogout() {
-    logout();
-    navigate("/login", { replace: true });
-  }
-
   return (
     <div className="dashboard-page">
       <div className="dashboard-header">
         <div>
           <h1 className="dashboard-title">Owner Dashboard</h1>
           <p className="dashboard-subtitle">Manage your store and view customer ratings</p>
-        </div>
-        <div className="dashboard-user-info">
-          <span className="user-name-pill">{user?.name}</span>
-          <button onClick={handleLogout} className="btn btn-outline btn-sm">Logout</button>
         </div>
       </div>
 
