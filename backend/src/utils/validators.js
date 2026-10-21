@@ -22,7 +22,7 @@ const PASSWORD_UPPER_REGEX   = /[A-Z]/;
 
 /**
  * Validate name field.
- * Rules: required, trimmed length 20–60 characters.
+ * Rules: required, trimmed length 20–40 characters (per spec).
  * @param {string} name
  * @returns {string|null} error message or null if valid
  */
@@ -30,7 +30,7 @@ function validateName(name) {
   if (!name || typeof name !== "string") return "Name is required";
   const trimmed = name.trim();
   if (trimmed.length < 20) return "Name must be at least 20 characters";
-  if (trimmed.length > 60) return "Name must not exceed 60 characters";
+  if (trimmed.length > 40) return "Name must not exceed 40 characters";
   return null;
 }
 

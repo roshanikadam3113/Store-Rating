@@ -103,7 +103,7 @@ export default function Register() {
           <div className="form-group">
             <label htmlFor="name">
               Full name
-              <span className="char-counter">{nameCount}/60</span>
+              <span className="char-counter">{nameCount}/40</span>
             </label>
             <input
               id="name"
@@ -114,7 +114,7 @@ export default function Register() {
               onChange={handleChange}
               className={errors.name ? "input-error" : ""}
               placeholder="Your full name"
-              maxLength={60}
+              maxLength={40}
               aria-invalid={Boolean(errors.name)}
               aria-describedby={errors.name ? "register-name-error" : "register-name-help"}
               required
@@ -123,7 +123,7 @@ export default function Register() {
             {errors.name ? (
               <span className="field-error" id="register-name-error">{errors.name}</span>
             ) : (
-              <span className="field-help" id="register-name-help">Use 20–60 characters.</span>
+              <span className="field-help" id="register-name-help">Use 20–40 characters.</span>
             )}
           </div>
 
